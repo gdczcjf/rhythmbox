@@ -85,6 +85,7 @@ struct _RBShellPlayerClass
 					       const char *property,
 					       GValue *old,
 					       GValue *newValue);
+	void (*volume_changed) (RBShellPlayer *player, gint64 volume);
 };
 
 GType			rb_shell_player_get_type   (void);

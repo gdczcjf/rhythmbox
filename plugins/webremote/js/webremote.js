@@ -220,6 +220,9 @@ var connect = function() {
 			}
 			replaceImage("trackimage", imgclass, imgsrc);
 		}
+		if ("volume" in m) {
+			document.getElementById("volume-range").value = m.volume;
+		}
 	};
 
 	return false;
@@ -236,6 +239,10 @@ var seekinput = function() {
 		seeking = true;
 	}
 };
+
+var setVolume = function() {
+	s.send(JSON.stringify({ 'action': 'set-volume', 'volume': parseInt(this.value)}));
+}
 
 var toggleStreaming = function() {
 	if (streaming) {
@@ -256,6 +263,8 @@ window.onload = function() {
 	document.getElementById("next").addEventListener('click', sendevent);
 
 	document.getElementById("seekbar-range").addEventListener('input', seekinput);
+
+	document.getElementById("volume-range").addEventListener('input', setVolume)
 
 	// document.getElementById("stream-check").addEventListener('click', toggleStreaming);
 

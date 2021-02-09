@@ -73,7 +73,8 @@ class ClientSession(object):
 			'next': self.plugin.client_next,
 			'previous': self.plugin.client_previous,
 			'playpause': self.plugin.client_playpause,
-			'seek': self.plugin.client_seek
+			'seek': self.plugin.client_seek,
+			'set-volume': self.plugin.client_set_volume
 		}
 
 	def message_cb(self, conn, msgtype, message):
@@ -317,11 +318,19 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 		except Exception as e:
 			pass
 
+	def set_volume(self, update):
+		try:
+			(r, volume) = self.shell_player.get_volume()
+			update['volume'] = volume * 100
+		except Exception as e:
+			pass
+
 	def client_status(self, message):
 		entry = self.shell_player.get_playing_entry()
 		if entry:
 			m = self.entry_details(entry)
 			self.set_playing_position(m)
+			self.set_volume(m)
 			p = self.shell_player.get_playing()
 			m['playing'] = p[1]
 		else:
@@ -359,6 +368,13 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 			return {'result': str(e) }
 
 
+	def client_set_volume(self, message):
+		try:
+			self.shell_player.set_volume(message['volume'] / 100)
+			return {'result': 'ok'}
+		except Exception as e:
+			return {'result': str(e) }
+
 	def playing_song_changed_cb(self, player, entry):
 		self.elapsed = 0
 		self.dispatch(self.entry_details(entry))
@@ -378,6 +394,10 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 		if abs(elapsed - self.elapsed) > 1000000000:
 			self.dispatch({'position': elapsed/1000000})	# ms
 		self.elapsed = elapsed
+
+	def volume_changed_cb(self, player, volume):
+		u = { 'volume': volume }
+		self.dispatch(u)
 
 	def art_added_cb(self, store, key, filename, data):
 		entry = self.shell_player.get_playing_entry()
@@ -545,6 +565,7 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 		self.shell_player.connect("playing-song-property-changed", self.playing_song_property_changed_cb)
 		self.shell_player.connect("playing-changed", self.playing_changed_cb)
 		self.shell_player.connect("elapsed-nano-changed", self.elapsed_nano_changed_cb)
+		self.shell_player.connect("volume-changed", self.volume_changed_cb)
 		self.playing_song_changed_cb(self.shell_player, self.shell_player.get_playing_entry())
 
 		self.http_server = Soup.Server()

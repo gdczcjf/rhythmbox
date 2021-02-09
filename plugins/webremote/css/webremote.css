@@ -70,3 +70,19 @@ img.noalbumart {
 	margin: 0px auto;
 	width: 100%;
 }
+
+#volume-control {
+	display: flex;
+}
+
+#volume-range {
+	display: flex;
+	margin: 0px auto;
+	width: 100%;
+}
+
+#volume-icon {
+	display: block;
+	margin: 0px 10px;
+}
+

@@ -268,6 +268,7 @@ enum
 	PLAYING_URI_CHANGED,
 	PLAYING_SONG_PROPERTY_CHANGED,
 	ELAPSED_NANO_CHANGED,
+	VOLUME_CHANGED,
 	LAST_SIGNAL
 };
 
@@ -319,6 +320,16 @@ reemit_playing_signal (RBShellPlayer *player,
 {
 	g_signal_emit (player, rb_shell_player_signals[PLAYING_CHANGED], 0,
 		       rb_player_playing (player->priv->mmplayer));
+}
+
+static void
+reemit_volume_signal(RBShellPlayer *player,
+		       GParamSpec *pspec,
+		       gpointer data)
+{
+	guint volume = player->priv->volume * 100;
+	g_signal_emit (player, rb_shell_player_signals[VOLUME_CHANGED], 0,
+		       volume);
 }
 
 static void
@@ -3366,6 +3377,9 @@ rb_shell_player_init (RBShellPlayer *player)
 
 	g_signal_connect (player, "notify::playing",
 			  G_CALLBACK (reemit_playing_signal), NULL);
+
+	g_signal_connect (player, "notify::volume",
+			  G_CALLBACK (reemit_volume_signal), NULL);
 }
 
 static void
@@ -3685,6 +3699,24 @@ rb_shell_player_class_init (RBShellPlayerClass *klass)
 			      G_TYPE_NONE,
 			      1,
 			      G_TYPE_BOOLEAN);
+
+	/**
+	 * RBShellPlayer::playing-changed:
+	 * @player: the #RBShellPlayer
+	 * @playing: flag indicating playback state
+	 *
+	 * Emitted when playback either stops or starts.
+	 */
+	rb_shell_player_signals[VOLUME_CHANGED] =
+		g_signal_new ("volume-changed",
+			      G_OBJECT_CLASS_TYPE (object_class),
+			      G_SIGNAL_RUN_LAST,
+			      G_STRUCT_OFFSET (RBShellPlayerClass, volume_changed),
+			      NULL, NULL,
+			      NULL,
+			      G_TYPE_NONE,
+			      1,
+			      G_TYPE_UINT);
 
 	/**
 	 * RBShellPlayer::playing-song-changed:
