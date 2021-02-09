@@ -36,8 +36,10 @@ import json
 import re
 import time
 import struct
-
+import zlib
+import hashlib
 import siphash
+import urllib
 
 import gettext
 gettext.install('rhythmbox', RB.locale_dir())
@@ -56,7 +58,69 @@ def get_host_name():
                 import socket
                 return socket.gethostname()
 
+class LyricsMsr:
+	def __init__(self):
+		self.lyrics = ""
+		self.lyrics_cache = os.path.join(RB.user_cache_dir(), "web-lyrics", "")
+		self.krc_dir= os.path.join(RB.music_dir(), "kugou-lyric", "")
 
+	def decompress_krc(self, krcBytes):
+		key = bytearray([ 0x40, 0x47, 0x61, 0x77, 0x5e, 0x32, 0x74, 0x47, 0x51, 0x36, 0x31, 0x2d, 0xce, 0xd2, 0x6e, 0x69])
+		decompress_bytes = bytearray([])
+		i = 0
+		for ch in krcBytes[4:]:
+			decompress_bytes.append(ch ^ key[i % 16])
+			i = i + 1
+
+		decode_bytes = zlib.decompress(bytes(decompress_bytes)).decode('utf-8-sig')
+		decode_bytes = re.sub(r'<[0-9\,]*>', '', decode_bytes)
+		return decode_bytes
+
+	def find_krc_by_md5(self, musicMd5):
+		for root, dirs, files in os.walk(self.krc_dir):
+			for file in files:
+				if(musicMd5 in file):
+					return os.path.join(root, file)
+		return ""
+
+	def find_krc(self, uri):
+		path = urllib.parse.unquote(urllib.parse.urlparse(uri).path)
+		if(not os.path.isfile(path)):
+			return ""
+		f = open(path, "rb")
+		musicMd5 = hashlib.md5(f.read()).hexdigest()
+		f.close()
+		
+		krc_path = self.find_krc_by_md5(musicMd5)
+		if(krc_path == ""):
+			print("krc file not found:" + krc_path)
+			return ""
+		
+		print("found krc file:" + krc_path)
+		krc_file = open(krc_path, "rb")
+		txt = self.decompress_krc(krc_file.read())
+		krc_file.close()
+		return txt
+
+	def get_lyrics(self, uri):
+		cacheFile = self.lyrics_cache + hashlib.md5(uri.encode("utf-8")).hexdigest()
+		if(os.path.isfile(cacheFile)):
+			f = open(cacheFile, 'r', -1, "utf-8")
+			txt = f.read()
+			f.close()
+			return txt
+		
+		txt = self.find_krc(uri)
+		
+		if(txt == ""):
+			return ""
+		
+		txt = re.sub(r'\[[^\]\n]+\]\r?\n', '', txt)
+
+		f = open(cacheFile, 'w', -1, "utf-8")
+		f.write(txt)
+		f.close()
+		return txt
 
 class ClientSession(object):
 
@@ -212,7 +276,8 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 		self.connections = {}
 		self.replay = []
 		self.access_key = None
-
+		self.lyricsMsr = LyricsMsr()
+		self.lyrics = ""
 		self.listen_reset = False
 
 	def get_sign_key(self, id):
@@ -337,6 +402,7 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 			m = { 'playing': False, 'id': 0 }
 
 		m['hostname'] = GLib.get_host_name()
+		m['lyrics'] = self.lyrics
 		return m
 
 	def client_next(self, message):
@@ -378,6 +444,11 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 	def playing_song_changed_cb(self, player, entry):
 		self.elapsed = 0
 		self.dispatch(self.entry_details(entry))
+
+	def playing_uri_changed_cb(self, player, uri):
+		self.lyrics = self.lyricsMsr.get_lyrics(uri)
+		m = { 'lyrics': self.lyrics }
+		self.dispatch(m)
 
 	def playing_changed_cb(self, player, playing):
 		u = { 'playing': playing }
@@ -564,6 +635,7 @@ class WebRemotePlugin(GObject.Object, Peas.Activatable):
 		self.shell_player.connect("playing-song-changed", self.playing_song_changed_cb)
 		self.shell_player.connect("playing-song-property-changed", self.playing_song_property_changed_cb)
 		self.shell_player.connect("playing-changed", self.playing_changed_cb)
+		self.shell_player.connect("playing-uri-changed", self.playing_uri_changed_cb)
 		self.shell_player.connect("elapsed-nano-changed", self.elapsed_nano_changed_cb)
 		self.shell_player.connect("volume-changed", self.volume_changed_cb)
 		self.playing_song_changed_cb(self.shell_player, self.shell_player.get_playing_entry())

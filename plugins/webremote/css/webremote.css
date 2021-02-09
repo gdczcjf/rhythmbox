@@ -86,3 +86,11 @@ img.noalbumart {
 	margin: 0px 10px;
 }
 
+.lyrics {
+	text-align: center;
+	font-size:xx-large;
+}
+
+#lyrics-2 {
+	color: brown;
+}

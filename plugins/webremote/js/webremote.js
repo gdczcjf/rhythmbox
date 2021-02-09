@@ -11,6 +11,85 @@ var s = null;
 
 var accesskey = '';
 
+class Lyrics {
+	constructor(txt) {
+		console.log("new lyrics");
+		this.lyrics = []
+		this.curIdx = 0;
+		if(txt) {
+			var vec = txt.replace(/\r/g,"").split("\n");
+			for(var i = 0; i < vec.length; ++i) {
+				var line = vec[i];
+				var re = new RegExp(/\[([0-9]+),([0-9]+)\](.+)/)
+				var res = re.exec(line)
+				if(res) {
+					this.lyrics.push({ start: parseInt(res[1]), txt: res[3] });
+				}
+			}
+		}
+		this.updateHtml()
+	}
+	
+	update(time) {
+		time += 100
+		if(this.lyrics.length == 0) {
+			return;
+		}
+		
+		var curIdx = this.findIdx(time, this.curIdx);
+		if(curIdx == this.curIdx)
+			return;
+		
+		console.log("lyrics.idx", curIdx)
+		this.curIdx = curIdx;
+		this.updateHtml();
+	}
+	
+	findIdx(time, curIdx) {
+		var line = this.lyrics[curIdx];
+		if (time >= line.start) {
+			for(;curIdx < this.lyrics.length; ++curIdx) {
+				line = this.lyrics[curIdx + 1];
+				if(line === undefined) {
+					break;
+				}
+				var end = line.start;
+				if(end === undefined || time < end) {
+					break;
+				}
+			}
+		} else {
+			for(;curIdx >= 0; --curIdx) {
+				line = this.lyrics[curIdx];
+				if(time >= line.start) {
+					break;
+				}
+			}
+		}
+		if(curIdx >= this.lyrics.length)
+			return this.lyrics.length - 1;
+		if(curIdx < 0)
+			return 0;
+		return curIdx;
+	}
+	
+	updateHtml() {
+		for (var i = 0; i < 6; ++i) {
+			var line = this.lyrics[this.curIdx + i - 2];
+			
+			if(i === 2) {
+				var ts = line ? line.start : 0;
+				console.log("lyrics.time",  String(Math.floor(ts/1000/60)) + ":" + String(ts%(1000*60)/1000))
+			}
+			var p = document.getElementById("lyrics-"+i);
+			if(p) {
+				p.textContent = (line && line.txt ? line.txt : "   ");
+			}
+		}
+	}
+}
+var lyrics = new Lyrics("");
+
 var sign = function(path) {
 	sh = new SipHash();
 	ts = new Date().getTime();
@@ -45,6 +124,7 @@ var tick = function() {
 		lastposition = lastposition + elapsed;
 		document.getElementById("seekbar-range").value = lastposition;
 		document.getElementById("trackposition").textContent = timestr(lastposition/1000);
+		lyrics.update(lastposition)
 	}
 
 	if (streaming && needsync) {
@@ -155,6 +235,7 @@ var connect = function() {
 			lastposition = 0;
 			document.getElementById("seekbar-range").value = 0;
 			document.getElementById("trackposition").textContent = timestr(0);
+			lyrics.update(0)
 
 			if (streaming) {
 				createAudioTag();
@@ -180,7 +261,7 @@ var connect = function() {
 			if (m.playing) {
 				iconname = "media-playback-pause-symbolic";
 				if (timer == null) {
-					timer = window.setInterval(tick, 250);
+					timer = window.setInterval(tick, 100);
 					lasttime = new Date();
 				}
 				if (streaming) {
@@ -202,6 +283,7 @@ var connect = function() {
 			lastposition = m.position;
 			document.getElementById("seekbar-range").value = m.position;
 			document.getElementById('trackposition').textContent = timestr(m.position / 1000);
+			lyrics.update(m.position)
 			seeking = false;
 
 			if (streaming) {
@@ -222,6 +304,9 @@ var connect = function() {
 		}
 		if ("volume" in m) {
 			document.getElementById("volume-range").value = m.volume;
+		}
+		if ("lyrics" in m) {
+			lyrics = new Lyrics(m.lyrics)
 		}
 	};
 
